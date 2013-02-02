@@ -1,4 +1,4 @@
-InControl-Foscam-Controller
+Foscam IP Camera Controller for InControl Home Automation
 ===========================
 
 This is a controller used by InControl Home Automation to manage and view Foscam IP Cameras.
