@@ -12,13 +12,31 @@ using System.IO;
 using System.Reflection;
 using System.Drawing;
 using System.Drawing.Imaging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System.Net.Configuration;
 
 namespace FoscamController {
-    public class FoscamController : HaController, IHaController {
+
+    public enum HaCameraCommands {
+        setPreset,
+        gotoPreset,
+        //moveRightStart,
+        //moveRightStop,
+        //moveLeftStart,
+        //moveLeftStop,
+        //moveUpStart,
+        //moveUpStop,
+        //moveDownStart,
+        //moveDownStop
+    }
+
+    public class FoscamController : HaController, IHaController, IHaDeviceCommand, IHaPoll {
 
         #region Constants
         public const string SNAPSHOT_URL = "/snapshot.cgi?user={username}&pwd={password}";
         public const string LIVESTREAM_URL = "/videostream.cgi?user={username}&pwd={password}&resolution=32";
+        public const string LIVESTREAM_ASF_URL = "/videostream.asf?user={username}&pwd={password}&resolution=32";
 
         public const string DECODER_URL = "/decoder_control.cgi?command={direction}&user={username}&pwd={password}";
 
@@ -28,11 +46,29 @@ namespace FoscamController {
         public const int DECODER_DIRECTION_DOWN = 2;
         public const int DECODER_DIRECTION_DOWN_STOP = 3;
 
-        public const int DECODER_DIRECTION_LEFT = 4;
+        public const int DECODER_DIRECTION_LEFT = 6;
         public const int DECODER_DIRECTION_LEFT_STOP = 5;
 
-        public const int DECODER_DIRECTION_RIGHT = 6;
+        public const int DECODER_DIRECTION_RIGHT = 4;
         public const int DECODER_DIRECTION_RIGHT_STOP = 7;
+
+        public const int DECODER_DIRECTION_SETPRESET_1 = 30;
+        public const int DECODER_DIRECTION_GOTOPRESET_1 = 31;
+
+        public const int DECODER_DIRECTION_SETPRESET_2 = 32;
+        public const int DECODER_DIRECTION_GOTOPRESET_2 = 33;
+
+        public const int DECODER_DIRECTION_SETPRESET_3 = 34;
+        public const int DECODER_DIRECTION_GOTOPRESET_3 = 35;
+
+        public const int DECODER_DIRECTION_SETPRESET_4 = 36;
+        public const int DECODER_DIRECTION_GOTOPRESET_4 = 37;
+
+        public const int DECODER_DIRECTION_SETPRESET_5 = 38;
+        public const int DECODER_DIRECTION_GOTOPRESET_5 = 39;
+
+        public const string META_SNAPSHOT_URL = "snapshot_url";
+        public const string META_MJPEG_URL = "mjpg_url";
 
         public const string META_RIGHT_URL = "right_url";
         public const string META_RIGHT_STOP_URL = "right_stop_url";
@@ -45,6 +81,23 @@ namespace FoscamController {
 
         public const string META_DOWN_URL = "down_url";
         public const string META_DOWN_STOP_URL = "down_stop_url";
+
+        public const string META_SETPRESET1_URL = "setpreset1";
+        public const string META_GETPRESET1_URL = "getpreset1";
+
+        public const string META_SETPRESET2_URL = "setpreset2";
+        public const string META_GETPRESET2_URL = "getpreset2";
+
+        public const string META_SETPRESET3_URL = "setpreset3";
+        public const string META_GETPRESET3_URL = "getpreset3";
+
+        public const string META_SETPRESET4_URL = "setpreset4";
+        public const string META_GETPRESET4_URL = "getpreset4";
+
+        public const string META_SETPRESET5_URL = "setpreset5";
+        public const string META_GETPRESET5_URL = "getpreset5";
+
+
         #endregion
 
         public static string getControllerName() {
@@ -92,6 +145,18 @@ namespace FoscamController {
         /// </summary>
         private void pollDevices() {
             while (isRunning) {
+
+                try {
+                    // This is required for some cams that don't follow the rules
+                    // It fixes the problem with "The server committed a protocol violation. Section=ResponseHeader Detail=CR must be followed by LF" 
+                    if (!ToggleAllowUnsafeHeaderParsing(true)) {
+                        // Log if this isn't able to be set
+                        writeLog("IPCAM: Unable to set safety header. Some IP cams may not function properly.");
+                    }
+                } catch (Exception ex) {
+                    writeLog("IPCAM: Unable to set safety header", ex);
+                }
+
                 try {
                     foreach (var d in localDevices) {
                         if (d.pollDevice) {
@@ -110,7 +175,25 @@ namespace FoscamController {
                     }
                 } catch {
                 }
+                Thread.Sleep(500);
             }
+        }
+
+        /// <summary>
+        /// Gets an instant camera still.
+        /// </summary>
+        /// <param name="providerDeviceId"></param>
+        /// <returns></returns>
+        public byte? pollDevice(object providerDeviceId) {
+
+            try {
+                var d = getHaDevice(providerDeviceId);
+                getSnapshot(d as CameraDevice);
+
+                return 1;
+            } catch { }
+
+            return 0;
         }
 
         /// <summary>
@@ -132,6 +215,32 @@ namespace FoscamController {
             return isSnapping;
         }
 
+        // Enable/disable useUnsafeHeaderParsing.
+        // See http://o2platform.wordpress.com/2010/10/20/dealing-with-the-server-committed-a-protocol-violation-sectionresponsestatusline/
+        public static bool ToggleAllowUnsafeHeaderParsing(bool enable) {
+            //Get the assembly that contains the internal class
+            Assembly assembly = Assembly.GetAssembly(typeof(SettingsSection));
+            if (assembly != null) {
+                //Use the assembly in order to get the internal type for the internal class
+                Type settingsSectionType = assembly.GetType("System.Net.Configuration.SettingsSectionInternal");
+                if (settingsSectionType != null) {
+                    //Use the internal static property to get an instance of the internal settings class.
+                    //If the static instance isn't created already invoking the property will create it for us.
+                    object anInstance = settingsSectionType.InvokeMember("Section", BindingFlags.Static | BindingFlags.GetProperty | BindingFlags.NonPublic, null, null, new object[] { });
+                    if (anInstance != null) {
+                        //Locate the private bool field that tells the framework if unsafe header parsing is allowed
+                        FieldInfo aUseUnsafeHeaderParsing = settingsSectionType.GetField("useUnsafeHeaderParsing", BindingFlags.NonPublic | BindingFlags.Instance);
+                        if (aUseUnsafeHeaderParsing != null) {
+                            aUseUnsafeHeaderParsing.SetValue(anInstance, enable);
+                            return true;
+                        }
+
+                    }
+                }
+            }
+            return false;
+        }
+
         /// <summary>
         /// 
         /// </summary>
@@ -142,8 +251,14 @@ namespace FoscamController {
                     currentSnapshots[device.name] = true;
                 }
 
-                var url = string.Format("http://{0}{1}", device.ip, replaceStringValues(SNAPSHOT_URL, device));
-                //var tempFile = Path.Combine(Path.GetDirectoryName( Assembly.GetExecutingAssembly().Location), "");
+                var url = "";
+
+                if (!string.IsNullOrEmpty(device.snapShotUrl)) {
+                    // non foscam
+                    url = device.snapShotUrl;
+                } else {
+                    url = string.Format("http://{0}{1}", device.ip, replaceStringValues(SNAPSHOT_URL, device));
+                }
 
                 try {
                     var tempFile = Path.GetTempFileName();
@@ -174,7 +289,10 @@ namespace FoscamController {
                     File.Delete(tempFile);
 
                 } catch (Exception ex) {
-                    writeLog("Foscam: Error getting snapshot", ex);
+                    var msg = string.Format("Foscam: Error getting snapshot from URL: {0}. {1}", url, ex.Message);
+
+                    writeLog("Foscam: Error getting snapshot from URL: " + url, ex);
+                    raiseOnDeviceError(device.deviceId, msg);
 
                     try {
                         //device.b64Image = ex.Message;
@@ -254,22 +372,52 @@ namespace FoscamController {
             };
 
             try {
-                // Get the ip, username and password from the devicename
-                var split = dbDevice.uniqueName.Split('|');
-                haDev.ip = split[0].Replace("http://", "");
-                haDev.userName = split[1];
-                haDev.password = split[2];
+
+                // See if there is meta data available for snapshot/mjpg url's
+                var snapShotUrl = getDeviceMetadata(haDev.deviceId, META_SNAPSHOT_URL);
+                var mjpegUrl = getDeviceMetadata(haDev.deviceId, META_MJPEG_URL);
+
+                if (!string.IsNullOrEmpty(snapShotUrl)) {
+
+                    haDev.liveStreamUrl = mjpegUrl;
+                    haDev.snapShotUrl = snapShotUrl;
+
+                    Thread t = new Thread(() => { setupMetaPropertiesForOtherCam(haDev, snapShotUrl, mjpegUrl); });
+                    t.IsBackground = true;
+                    t.Start();
+
+                } else {
+                    // Foscam only
+                    // Get the ip, username and password from the devicename
+                    try {
+                        var split = dbDevice.uniqueName.Split('|');
+                        haDev.ip = split[0].Replace("http://", "");
+                        haDev.userName = split[1];
+                        haDev.password = split[2];
+                    } catch { }
+
+                    haDev.liveStreamUrl = string.Format("http://{0}{1}", haDev.ip, replaceStringValues(LIVESTREAM_URL, haDev));
+
+                    Thread t = new Thread(() => { setupMetaProperties(haDev); });
+                    t.IsBackground = true;
+                    t.Start();
+                }
             } catch { }
-
-            haDev.liveStreamUrl = string.Format("http://{0}{1}", haDev.ip, replaceStringValues(LIVESTREAM_URL, haDev));
-
-            Thread t = new Thread(() => { setupMetaProperties(haDev); });
-            t.IsBackground = true;
-            t.Start();
 
             localDevices.Add(haDev);
 
             return haDev;
+        }
+
+        private void setupMetaPropertiesForOtherCam(CameraDevice cameraDevice, string snapShotUrl, string mjpegUrl) {
+            try {
+                var externalIp = getExternalIp();
+
+                // Get the external ip of this camera
+                var snapShotUri = new Uri(snapShotUrl);
+                cameraDevice.externalIp = snapShotUri.Host + ":" + snapShotUri.Port;
+
+            } catch { }
         }
 
         /// <summary>
@@ -300,6 +448,22 @@ namespace FoscamController {
 
                 cameraDevice.panRightUrl = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_RIGHT_URL), cameraDevice);
                 cameraDevice.panRightStopUrl = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_RIGHT_STOP_URL), cameraDevice);
+
+                cameraDevice.setPreset1Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_SETPRESET1_URL), cameraDevice);
+                cameraDevice.gotoPreset1Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_GETPRESET1_URL), cameraDevice);
+
+                cameraDevice.setPreset2Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_SETPRESET2_URL), cameraDevice);
+                cameraDevice.gotoPreset2Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_GETPRESET2_URL), cameraDevice);
+
+                cameraDevice.setPreset3Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_SETPRESET3_URL), cameraDevice);
+                cameraDevice.gotoPreset3Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_GETPRESET3_URL), cameraDevice);
+
+                cameraDevice.setPreset4Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_SETPRESET4_URL), cameraDevice);
+                cameraDevice.gotoPreset4Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_GETPRESET4_URL), cameraDevice);
+
+                cameraDevice.setPreset5Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_SETPRESET5_URL), cameraDevice);
+                cameraDevice.gotoPreset5Url = replaceStringValues(base.getDeviceMetadata(cameraDevice.deviceId, META_GETPRESET5_URL), cameraDevice);
+
             } catch (Exception ex) {
                 writeLog("Problem setting up device meta data", ex);
             }
@@ -309,21 +473,27 @@ namespace FoscamController {
         /// 
         /// </summary>
         private string getExternalIp() {
-            var a4 = "";
-            try {
-                // Get the external ip address on this network
-                var client = new WebClient();
-                var response = client.DownloadString("http://checkip.dyndns.org");
 
-                string[] a = response.Split(':');
-                string a2 = a[1].Substring(1);
-                string[] a3 = a2.Split('<');
-                a4 = a3[0];
-            } catch (Exception ex) {
-                writeLog("Error during getExternalIp()", ex);
+            if (this.lookedUpExternalIp == null) {
+
+                var a4 = "";
+                try {
+                    // Get the external ip address on this network
+                    var client = new WebClient();
+                    var response = client.DownloadString("http://checkip.dyndns.org");
+
+                    string[] a = response.Split(':');
+                    string a2 = a[1].Substring(1);
+                    string[] a3 = a2.Split('<');
+                    a4 = a3[0];
+                } catch (Exception ex) {
+                    writeLog("Error during getExternalIp()", ex);
+                }
+
+                lookedUpExternalIp = a4;
             }
 
-            return a4;
+            return lookedUpExternalIp;
         }
 
         public void finishedTracking() {
@@ -355,6 +525,118 @@ namespace FoscamController {
             };
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="url"></param>
+        private void doHtmlGet(string url, string ipAddress) {
+            using (var c = new WebClient()) {
+                try {
+                    url = string.Format(url, ipAddress);
+                    writeLog("gotoPreset URL " + url);
+                    c.DownloadStringAsync(new Uri(url));
+                } catch (Exception ex) {
+                    writeLog("Error during camera html command", ex);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="deviceId"></param>
+        /// <param name="commandData"></param>
+        private void gotoPreset(Guid deviceId, Dictionary<string, object> commandData, HaDeviceCommandResult result) {
+            // Get data from the commanddata
+            if (commandData != null && commandData.ContainsKey("presetIndex")) {
+                int presetIndex;
+                if (int.TryParse(commandData["presetIndex"].ToString(), out presetIndex)) {
+                    var device = getHaDevice(deviceId) as CameraDevice;
+                    if (device != null) {
+                        var url = device.getPresetUrl(presetIndex);
+                        doHtmlGet(url, device.ip);
+                    } else {
+                        result.success = false;
+                        result.message = "Device not found.";
+                    }
+                } else {
+                    result.success = false;
+                    result.message = "presetIndex is not an integer!";
+                }
+            } else {
+                result.success = false;
+                result.message = "presetIndex data not found!";
+            }
+        }
+
+        public string getAsfVideoFeedUrl(Guid deviceId) {
+            var cameraDevice = getHaDevice(deviceId) as CameraDevice;
+            return string.Format("http://{0}{1}", cameraDevice.externalIp, replaceStringValues(LIVESTREAM_ASF_URL, cameraDevice));
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="deviceId"></param>
+        /// <param name="commandData"></param>
+        /// <param name="result"></param>
+        private void setPreset(Guid deviceId, Dictionary<string, object> commandData, HaDeviceCommandResult result) {
+            // Get data from the commanddata
+            if (commandData != null && commandData.ContainsKey("presetIndex")) {
+                int presetIndex;
+                if (int.TryParse(commandData["presetIndex"].ToString(), out presetIndex)) {
+                    var device = getHaDevice(deviceId) as CameraDevice;
+                    if (device != null) {
+                        var url = device.getPresetSetUrl(presetIndex);
+                        doHtmlGet(url, device.ip);
+                    } else {
+                        result.success = false;
+                        result.message = "Device not found.";
+                    }
+                } else {
+                    result.success = false;
+                    result.message = "presetIndex is not an integer!";
+                }
+            } else {
+                result.success = false;
+                result.message = "presetIndex data not found!";
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="deviceId"></param>
+        /// <param name="jsonCommandData"></param>
+        /// <returns></returns>
+        public HaDeviceCommandResult processCommand(Guid deviceId, HaDeviceCommand jsonCommandData) {
+
+            var result = new HaDeviceCommandResult() {
+                success = true
+            };
+
+            HaCameraCommands cameraCommand;
+
+            // Make sure it's a valid commandType
+            if (Enum.TryParse<HaCameraCommands>(jsonCommandData.commandType, out cameraCommand)) {
+
+                switch (cameraCommand) {
+                    case HaCameraCommands.gotoPreset:
+                        gotoPreset(deviceId, jsonCommandData.commandData, result);
+                        break;
+                    case HaCameraCommands.setPreset:
+                        setPreset(deviceId, jsonCommandData.commandData, result);
+                        break;
+                }
+
+            } else {
+                result.success = false;
+                result.message = "Invalid command type " + jsonCommandData.commandType;
+            }
+
+            return result;
+        }
+
         public void stop() {
             isRunning = false;
         }
@@ -363,5 +645,18 @@ namespace FoscamController {
             return string.Format("http://{0}|{1}|{2}", ipAddress, username, password);
         }
 
+        public static string getDeviceName(string snapshotUrl, string streamUrl) {
+
+            // By default the name is going to be the host:ip
+            try {
+                var uri = new Uri(snapshotUrl);
+                return string.Format("{0}:{1}", uri.Host, uri.Port);
+            } catch { }
+
+            // Failsafe
+            return Guid.NewGuid().ToString();
+        }
+
+        public string lookedUpExternalIp { get; set; }
     }
 }

@@ -5,26 +5,58 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:l="clr-namespace:MLS.HA.DeviceController.Common.Gui;assembly=MLS.HA.DeviceController.Common"
              mc:Ignorable="d" Title="InControl Home Automation"
-             d:DesignHeight="300" d:DesignWidth="300" Width="310" Height="190">
+             Width="320" Height="260">
     
     <Grid Margin="5">
-        <StackPanel>
-            <StackPanel Orientation="Horizontal">
-                <Label Content="Camera IP Address: "/>
-                <TextBox Width="160" Name="txtIpAddress"></TextBox>
+            
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"></RowDefinition>
+            <RowDefinition Height="30"></RowDefinition>
+        </Grid.RowDefinitions>
+            
+            <TabControl Grid.Row="0" Margin="0,0,0,10">
+                <TabItem Header="Foscam">
+                    <Grid>
+                        <StackPanel>                        
+                            <Label>This method works for older Foscam models</Label>                        
+                            <StackPanel Orientation="Horizontal">
+                                <Label Content="Camera IP Address: "/>
+                                <TextBox Width="160" Name="txtIpAddress"></TextBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Label Content="Username: " Margin="0,0,46,0"/>
+                                <TextBox Width="160" Name="txtUsername"></TextBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Label Content="Password: " Margin="0,0,49,0"/>
+                                <PasswordBox Name="txtPassword" Width="160"></PasswordBox>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>                    
+                </TabItem>
+                <TabItem Header="Other MJPEG Camera">
+                    <Grid>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Label Content="Snapshot Url: " Width="110" />
+                                <TextBox Width="160" Name="txtSnapshotUrl"></TextBox>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Label Content="MJPEG Url:" Width="110" />
+                                <TextBox Width="160" Name="txtMjpegUrl"></TextBox>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                </TabItem>                
+            </TabControl>
+                      
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,0" HorizontalAlignment="Right" Grid.Row="1">
+                <ProgressBar Name="pbStatus" IsIndeterminate="True" Visibility="Hidden" Margin="5,0,0,0"></ProgressBar>
+
+                <Button Name="btnHelp" Content="Help" Padding="5" Margin="0,0,20,0" Click="Button_Click"></Button>
+                <Button Name="btnAdd" Content="Add Camera" Margin="0,0,7,0" Click="btnAdd_click" Padding="5"></Button>
+                <Button Name="btnCancel" Content="Cancel" Margin="0,0,7,0" Click="btnCancel_click" Padding="5"></Button>
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                <Label Content="Username: " Margin="0,0,46,0"/>
-                <TextBox Width="160" Name="txtUsername"></TextBox>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                <Label Content="Password: " Margin="0,0,49,0"/>
-                <TextBox Width="160" Name="txtPassword"></TextBox>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right">
-                <Button Content="Add Camera" Margin="0,0,7,0" Click="btnAdd_click" Padding="5"></Button>
-                <Button Content="Cancel" Margin="0,0,7,0" Click="btnCancel_click" Padding="5"></Button>
-            </StackPanel>
-        </StackPanel>
+        
     </Grid>
 </l:PluginGuiWindow>

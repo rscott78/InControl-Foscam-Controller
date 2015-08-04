@@ -8,7 +8,7 @@ namespace FoscamController {
     public class MenuItem : IPluginMenuItem {
 
         public string mainMenuName() {
-            return "Foscam";
+            return "Ip Camera";
         }
 
         /// <summary>
@@ -19,7 +19,7 @@ namespace FoscamController {
             var subs = new List<PluginSubMenuItem>();
 
             var menuItem = new PluginSubMenuItem();
-            menuItem.menuName = "_Add Foscam IP Camera";
+            menuItem.menuName = "_Add MJPEG IP Camera";
             menuItem.onMenuItemClicked += addFoscamAddDeviceClicked;
             subs.Add(menuItem);
 
