@@ -128,14 +128,6 @@ namespace FoscamController {
             tPolldevices.IsBackground = true;
             tPolldevices.Start();
 
-            // TEST - add a local device
-            //Thread t = new Thread(() => {
-            //    Thread.Sleep(3000);
-            //    base.raiseDiscoveredDevice(DeviceProviderTypes.PluginDevice, controllerName, DeviceType.IpCamera, FoscamController.getDeviceName("http://10.4.3.51:8050|admin|mwisvs2m"), "IpCamera");
-            //});
-            //t.IsBackground = true;
-            //t.Start();
-
             writeLog("Foscam: Startup complete");
         }
 
